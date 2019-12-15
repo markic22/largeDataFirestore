@@ -4,11 +4,14 @@ import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
 import android.view.View
+import androidx.annotation.UiThread
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.firebase.firestore.EventListener
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.QuerySnapshot
 import kotlinx.android.synthetic.main.activity_main.*
+import kotlinx.coroutines.*
+import kotlin.coroutines.CoroutineContext
 
 class MainActivity : AppCompatActivity() {
 
@@ -22,29 +25,58 @@ class MainActivity : AppCompatActivity() {
         progress.show()
         button.visibility = View.VISIBLE
 
-
-        //click on button generates additional items
         button.setOnClickListener {
-            for (x in 0 until 1000){
-                Log.d("add", "add document: $x")
-                firestore.collection("list").add(TestObject())
-                firestore.collection("secondList").add(DifferentObject())
+            launchOnIO {
+                for (y in 10 until 20) {
+                    for (x in 0 until 1000) {
+                        Log.d("add", "add document: $x")
+                        firestore.collection("list").add(TestObject(type = y.toLong()))
+                    }
+                }
             }
         }
 
-        recyclerView.layoutManager = LinearLayoutManager(this)
+        getObjectsInBatches()
+    }
 
-        firestore.collection("list").addSnapshotListener { snapshots, e ->
-            //the issue is appearant even without puting all of this into objects
-//            list = snapshots?.toObjects(TestObject::class.java)
-//            recyclerView.adapter = TestObjectRecyclerViewAdapter(list!!)
-            count.text = snapshots?.documents?.size.toString()
-//            progress.hide()
-        }
 
-        firestore.collection("secondList").addSnapshotListener { snapshots, e ->
-//                        secondaryList = snapshots?.toObjects(DifferentObject::class.java)
+    fun getObjectsInBatches() {
+        for (x in 0 until 20) {
+            firestore.collection("list").whereEqualTo("type", x.toLong())
+                .addSnapshotListener { snapshots, e ->
 
+                    if(e != null){
+                        count.text = e.message
+                        return@addSnapshotListener
+                    }
+                    count.text = "done for $x"
+                    val list = mutableListOf<TestObject>()
+
+                        snapshots?.forEachIndexed { index, queryDocumentSnapshot ->
+                            list.add(queryDocumentSnapshot.toObject(TestObject::class.java))
+                        }
+                        Log.d("read", "list size: ${list.size}")
+
+                }
         }
     }
+
+    fun getAllObjects(){
+        firestore.collection("list").limit(8000)
+            .addSnapshotListener { snapshots, e ->
+                snapshots?.forEachIndexed { index, queryDocumentSnapshot ->
+                    Log.d("Document read",  " and count number $index")
+                }
+            }
+    }
+}
+
+
+fun launchOnIO(block: suspend CoroutineScope.() -> Unit): Job {
+    return GlobalScope.launch(Dispatchers.IO) { block() }
+}
+
+
+suspend fun <T> withIOContext(block: suspend CoroutineScope.() -> T): T {
+    return withContext(Dispatchers.IO) { block() }
 }

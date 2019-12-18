@@ -16,7 +16,7 @@ import kotlin.coroutines.CoroutineContext
 class MainActivity : AppCompatActivity() {
 
     val firestore = FirebaseFirestore.getInstance()
-    var list: MutableList<TestObject>? = mutableListOf()
+    var list: MutableList<TestObject> = mutableListOf()
     var secondaryList: MutableList<DifferentObject>? = mutableListOf()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -36,27 +36,30 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        getObjectsInBatches()
+        getAllObjects()
     }
 
-
     fun getObjectsInBatches() {
+
+        count.text = "loading"
+        var countOfCompletedSnapshots = 0
         for (x in 0 until 20) {
-            firestore.collection("list").whereEqualTo("type", x.toLong())
+            firestore.collection("list").whereEqualTo("type", x.toLong()).limit(400)
                 .addSnapshotListener { snapshots, e ->
 
                     if(e != null){
                         count.text = e.message
                         return@addSnapshotListener
                     }
-                    count.text = "done for $x"
-                    val list = mutableListOf<TestObject>()
 
                         snapshots?.forEachIndexed { index, queryDocumentSnapshot ->
                             list.add(queryDocumentSnapshot.toObject(TestObject::class.java))
                         }
                         Log.d("read", "list size: ${list.size}")
-
+                    countOfCompletedSnapshots =+ 1
+                    if(countOfCompletedSnapshots == 19){
+                        count.text = "done"
+                    }
                 }
         }
     }
